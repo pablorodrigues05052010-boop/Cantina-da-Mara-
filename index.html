@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f47721">
+<title>Cantina da Mara</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--orange:#f47721;--dark:#292522;--muted:#777;--bg:#fff8f2;--line:#f0e2d7}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Arial,sans-serif;color:var(--dark)}
+header{background:var(--orange);color:white;padding:20px 16px;position:sticky;top:0;z-index:2}
+header h1{margin:0;font-size:22px}header p{margin:5px 0 0;font-size:13px}
+main{max-width:900px;margin:auto;padding:16px}
+.panel,.stat{background:white;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+nav{display:flex;gap:8px;overflow:auto;padding:12px 0}
+nav button{white-space:nowrap;border:1px solid var(--line);background:white;border-radius:22px;padding:10px 14px;color:var(--dark)}
+nav button.active,.primary{background:var(--orange);color:white;border-color:var(--orange)}
+h2{font-size:19px;margin:0 0 14px}h3{font-size:16px;margin:0 0 10px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat strong{display:block;font-size:22px;margin-top:8px}.muted{color:var(--muted);font-size:13px}
+label{display:block;font-size:13px;font-weight:bold;margin:12px 0 5px}
+input,select{width:100%;padding:12px;border:1px solid #dfd5ce;border-radius:9px;font-size:16px;background:white}
+button{cursor:pointer;font-size:14px;font-weight:bold;padding:11px 14px;border:1px solid var(--line);border-radius:9px;background:white;color:var(--dark)}
+button.primary{background:var(--orange);color:white;border:0}
+form button{margin-top:14px;width:100%}
+.row{display:flex;gap:8px;align-items:center}.row>*{flex:1}
+.item{padding:12px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px}
+.item:last-child{border:0}.hidden{display:none!important}
+.notice{padding:12px;border-radius:9px;background:#fff0e4;color:#8a3e0b;margin:10px 0;font-size:14px}
+.danger{color:#a32626}.small{font-size:12px}
+@media(min-width:650px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.forms{display:grid;grid-template-columns:1fr 1fr;gap:14px}}
+</style>
+</head>
+<body>
+<header><h1>🍊 Cantina da Mara</h1><p>Gestão simples para sua cantina</p></header>
+<main>
+<section id="auth" class="panel">
+<h2>Acessar sua cantina</h2>
+<p class="muted">Crie sua conta ou entre para acessar seus dados.</p>
+<label>E-mail</label><input id="email" type="email" autocomplete="email" placeholder="seuemail@exemplo.com">
+<label>Senha</label><input id="password" type="password" autocomplete="current-password" placeholder="Mínimo de 6 caracteres">
+<div class="row" style="margin-top:14px"><button class="primary" id="login">Entrar</button><button id="signup">Criar conta</button></div>
+<p id="authMsg" class="muted"></p>
+</section>
+<section id="app" class="hidden">
+<div class="row" style="justify-content:space-between"><span id="welcome" class="muted"></span><button id="logout">Sair</button></div>
+<nav>
+<button class="active" data-tab="inicio">Início</button><button data-tab="produtos">Produtos e estoque</button><button data-tab="vendas">Vendas</button><button data-tab="despesas">Despesas</button>
+</nav>
+<section id="inicio" class="tab">
+<div class="grid">
+<div class="stat"><span class="muted">Faturamento</span><strong id="revenue">R$ 0,00</strong></div>
+<div class="stat"><span class="muted">Custo vendido</span><strong id="costs">R$ 0,00</strong></div>
+<div class="stat"><span class="muted">Despesas</span><strong id="expenseTotal">R$ 0,00</strong></div>
+<div class="stat"><span class="muted">Lucro estimado</span><strong id="profit">R$ 0,00</strong></div>
+</div>
+<div class="panel"><h3>Resumo</h3><p id="summary" class="muted">Carregando...</p></div>
+</section>
+<section id="produtos" class="tab hidden">
+<div class="panel"><h2>Cadastrar produto</h2>
+<form id="productForm" class="forms">
+<div><label>Nome do produto</label><input id="pname" required placeholder="Ex.: Coxinha"></div>
+<div><label>Categoria</label><input id="pcat" placeholder="Salgados, bebidas..."></div>
+<div><label>Custo unitário (R$)</label><input id="pcost" required inputmode="decimal" placeholder="Ex.: 3,50"></div>
+<div><label>Preço de venda (R$)</label><input id="pprice" required inputmode="decimal" placeholder="Ex.: 6,00"></div>
+<div><label>Quantidade inicial</label><input id="pstock" type="number" min="0" step="1" value="0" required></div>
+<div><button class="primary" type="submit">Salvar produto</button></div>
+</form></div>
+<div class="panel"><h2>Estoque</h2><div id="productList" class="muted">Nenhum produto cadastrado.</div></div>
+</section>
+<section id="vendas" class="tab hidden">
+<div class="panel"><h2>Registrar venda</h2>
+<form id="saleForm">
+<label>Produto</label><select id="saleProduct" required></select>
+<label>Quantidade</label><input id="saleQty" type="number" min="1" step="1" value="1" required>
+<button class="primary" type="submit">Registrar venda</button>
+</form></div>
+<div class="panel"><h2>Vendas recentes</h2><div id="saleList" class="muted">Nenhuma venda registrada.</div></div>
+</section>
+<section id="despesas" class="tab hidden">
+<div class="panel"><h2>Adicionar despesa</h2>
+<form id="expenseForm">
+<label>Descrição</label><input id="edesc" required placeholder="Ex.: gás, energia, embalagem">
+<label>Valor (R$)</label><input id="eamount" required inputmode="decimal" placeholder="Ex.: 85,00">
+<button class="primary" type="submit">Salvar despesa</button>
+</form></div>
+<div class="panel"><h2>Despesas registradas</h2><div id="expenseList" class="muted">Nenhuma despesa registrada.</div></div>
+</section>
+<p id="appMsg" class="muted"></p>
+</section>
+<div class="muted small" style="text-align:center;padding:20px">Cantina da Mara · Primeira versão</div>
+</main>
+<script>
+/* PREENCHA ESTES DOIS CAMPOS COM OS DADOS DO SEU PROJETO SUPABASE */
+const SUPABASE_URL = "COLE_AQUI_A_URL_DO_PROJETO";
+const SUPABASE_PUBLIC_KEY = "COLE_AQUI_A_CHAVE_PUBLICA";
+let db=null, products=[], sales=[], expenses=[];
+const $=id=>document.getElementById(id);
+const money=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const num=s=>Number(String(s).trim().replace(/\./g,'').replace(',','.'));
+function message(id,msg){$(id).textContent=msg}
+function setup(){
+ if(!window.supabase){message('authMsg','Não foi possível carregar a biblioteca. Confira sua conexão.');return}
+ if(SUPABASE_URL.startsWith('COLE_')||SUPABASE_PUBLIC_KEY.startsWith('COLE_')){message('authMsg','Falta configurar a URL e a chave pública do Supabase no arquivo index.html.');return}
+ db=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLIC_KEY);
+ db.auth.getSession().then(({data})=>{if(data.session)showApp(data.session)});
+}
+async function auth(mode){
+ const email=$('email').value.trim(),password=$('password').value;
+ if(!email||password.length<6){message('authMsg','Informe um e-mail e uma senha com pelo menos 6 caracteres.');return}
+ message('authMsg','Aguarde...');
+ const result=mode==='signup'?await db.auth.signUp({email,password}):await db.auth.signInWithPassword({email,password});
+ if(result.error){message('authMsg',result.error.message);return}
+ if(mode==='signup'&&!result.data.session){message('authMsg','Conta criada! Confira seu e-mail para confirmar o cadastro e depois entre.');return}
+ message('authMsg','Acesso realizado.');showApp(result.data.session);
+}
+async function showApp(session){
+ $('auth').classList.add('hidden');$('app').classList.remove('hidden');$('welcome').textContent='Conectado: '+session.user.email;
+ await loadAll();
+}
+async function loadAll(){
+ const [p,s,e]=await Promise.all([
+ db.from('products').select('*').order('name'),
+ db.from('sales').select('*').order('created_at',{ascending:false}).limit(30),
+ db.from('expenses').select('*').order('created_at',{ascending:false}).limit(100)
+ ]);
+ if(p.error||s.error||e.error){message('appMsg','Erro ao carregar dados: '+(p.error||s.error||e.error).message);return}
+ products=p.data||[];sales=s.data||[];expenses=e.data||[];render();
+}
+function render(){
+ $('productList').innerHTML=products.length?products.map(p=>`<div class="item"><div><b>${esc(p.name)}</b><div class="muted">${esc(p.category||'Sem categoria')} · Custo ${money(p.cost)} · Venda ${money(p.price)}</div></div><b>${p.stock} un.</b></div>`).join(''):'Nenhum produto cadastrado.';
+ $('saleProduct').innerHTML=products.length?products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${p.stock} em estoque — ${money(p.price)}</option>`).join(''):'<option value="">Cadastre um produto primeiro</option>';
+ $('saleList').innerHTML=sales.length?sales.map(s=>`<div class="item"><span>${new Date(s.created_at).toLocaleString('pt-BR')}</span><b>${money(s.total)}</b></div>`).join(''):'Nenhuma venda registrada.';
+ $('expenseList').innerHTML=expenses.length?expenses.map(e=>`<div class="item"><span>${esc(e.description)}<br><span class="muted">${new Date(e.created_at).toLocaleDateString('pt-BR')}</span></span><b>${money(e.amount)}</b></div>`).join(''):'Nenhuma despesa registrada.';
+ const rev=sales.reduce((a,x)=>a+Number(x.total),0),cost=sales.reduce((a,x)=>a+Number(x.cost_total),0),ex=expenses.reduce((a,x)=>a+Number(x.amount),0);
+ $('revenue').textContent=money(rev);$('costs').textContent=money(cost);$('expenseTotal').textContent=money(ex);$('profit').textContent=money(rev-cost-ex);
+ $('summary').textContent=`${products.length} produtos cadastrados. ${products.reduce((a,p)=>a+Number(p.stock),0)} unidades em estoque. Valores calculados com os registros carregados nesta tela.`;
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('login').onclick=()=>auth('login');$('signup').onclick=()=>auth('signup');
+$('logout').onclick=async()=>{await db.auth.signOut();$('app').classList.add('hidden');$('auth').classList.remove('hidden')};
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab).classList.remove('hidden')});
+$('productForm').onsubmit=async ev=>{
+ ev.preventDefault();const cost=num($('pcost').value),price=num($('pprice').value),stock=Number($('pstock').value);
+ if(!Number.isFinite(cost)||!Number.isFinite(price)||cost<0||price<0||!Number.isInteger(stock)||stock<0){message('appMsg','Confira custo, preço e quantidade. Use vírgula nos centavos.');return}
+ const {data:{user}}=await db.auth.getUser();
+ const {error}=await db.from('products').insert({user_id:user.id,name:$('pname').value.trim(),category:$('pcat').value.trim(),cost,price,stock});
+ if(error){message('appMsg','Erro ao salvar produto: '+error.message);return}
+ ev.target.reset();$('pstock').value=0;message('appMsg','Produto salvo!');await loadAll();
+};
+$('saleForm').onsubmit=async ev=>{
+ ev.preventDefault();const p=products.find(x=>x.id===$('saleProduct').value),qty=Number($('saleQty').value);
+ if(!p||!Number.isInteger(qty)||qty<1||qty>p.stock){message('appMsg','Produto inválido ou estoque insuficiente.');return}
+ const {data:{user}}=await db.auth.getUser();
+ const total=Number(p.price)*qty,cost_total=Number(p.cost)*qty;
+ const sale=await db.from('sales').insert({user_id:user.id,total,cost_total}).select().single();
+ if(sale.error){message('appMsg','Erro ao registrar venda: '+sale.error.message);return}
+ const upd=await db.from('products').update({stock:p.stock-qty}).eq('id',p.id);
+ if(upd.error){message('appMsg','Venda registrada, mas não foi possível atualizar o estoque. Confira o produto.');return}
+ const item=await db.from('sale_items').insert({user_id:user.id,sale_id:sale.data.id,product_id:p.id,product_name:p.name,quantity:qty,unit_price:p.price,unit_cost:p.cost});
+ await db.from('stock_movements').insert({user_id:user.id,product_id:p.id,movement_type:'saida',quantity:qty,description:'Venda'});
+ if(item.error){message('appMsg','Venda e estoque registrados, mas houve erro nos itens: '+item.error.message);return}
+ $('saleQty').value=1;message('appMsg','Venda registrada!');await loadAll();
+};
+$('expenseForm').onsubmit=async ev=>{
+ ev.preventDefault();const amount=num($('eamount').value);
+ if(!Number.isFinite(amount)||amount<=0){message('appMsg','Informe um valor válido maior que zero.');return}
+ const {data:{user}}=await db.auth.getUser();
+ const {error}=await db.from('expenses').insert({user_id:user.id,description:$('edesc').value.trim(),amount});
+ if(error){message('appMsg','Erro ao salvar despesa: '+error.message);return}
+ ev.target.reset();message('appMsg','Despesa salva!');await loadAll();
+};
+setup();
+</script>
+</body>
+</html>
