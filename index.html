@@ -61,7 +61,45 @@ form button{margin-top:14px;width:100%}
 </div>
 <div class="panel"><h3>Resumo</h3><p id="summary" class="muted">Carregando...</p></div>
 </section>
-<section id="produtos" class="tab hidden">
+<section id="expediente" class="tab hidden">
+<div class="panel">
+<h2>Expediente do dia</h2>
+<div id="sessionStatus" class="notice">Carregando expediente...</div>
+
+<div id="sessionOpenArea" class="hidden">
+<form id="sessionOpenForm">
+<label>Dinheiro inicial no caixa (R$)</label>
+<input id="openingCash" inputmode="decimal" value="0" required>
+<label>Observações da abertura</label>
+<input id="openingNotes" placeholder="Opcional">
+<button class="primary" type="submit">Abrir expediente</button>
+</form>
+</div>
+
+<div id="sessionCloseArea" class="hidden">
+<p id="sessionOpenedInfo" class="muted"></p>
+<form id="sessionCloseForm">
+<label>Dinheiro contado no fechamento (R$)</label>
+<input id="closingCash" inputmode="decimal" required>
+<label>Observações do fechamento</label>
+<input id="closingNotes" placeholder="Opcional">
+<button class="primary" type="submit">Fechar expediente</button>
+</form>
+</div>
+
+<div id="sessionClosedArea" class="hidden">
+<h3>Resumo do fechamento</h3>
+<p>Vendas: <strong id="sessionSales"></strong></p>
+<p>Despesas: <strong id="sessionExpenses"></strong></p>
+<p>Lucro líquido estimado: <strong id="sessionProfit"></strong></p>
+<p>Diferença no caixa: <strong id="sessionDifference"></strong></p>
+<p id="sessionCloseInfo" class="muted"></p>
+</div>
+
+<p class="muted small">A conferência é estimada porque ainda não separamos dinheiro, Pix e cartão.</p>
+</div>
+</section>
+ <section id="produtos" class="tab hidden">
 <div class="panel"><h2>Cadastrar produto</h2>
 <form id="productForm" class="forms">
 <div><label>Nome do produto</label><input id="pname" required placeholder="Ex.: Coxinha"></div>
@@ -99,7 +137,7 @@ form button{margin-top:14px;width:100%}
 /* PREENCHA ESTES DOIS CAMPOS COM OS DADOS DO SEU PROJETO SUPABASE */
 const SUPABASE_URL = "https://umssuhegmqajewvbinqf.supabase.co";;
 const SUPABASE_PUBLIC_KEY = "sb_publishable_YzX-YOAH9QCnWL8x5Je51Q_PERsWD2J";
-let db=null, products=[], sales=[], expenses=[];
+let db=null, products=[], sales=[], expenses=[], session=null;
 const $=id=>document.getElementById(id);
 const money=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const num=s=>Number(String(s).trim().replace(/\./g,'').replace(',','.'));
@@ -119,9 +157,12 @@ async function auth(mode){
  if(mode==='signup'&&!result.data.session){message('authMsg','Conta criada! Confira seu e-mail para confirmar o cadastro e depois entre.');return}
  message('authMsg','Acesso realizado.');showApp(result.data.session);
 }
-async function showApp(session){
- $('auth').classList.add('hidden');$('app').classList.remove('hidden');$('welcome').textContent='Conectado: '+session.user.email;
+async function showApp(authSession){
+ $('auth').classList.add('hidden');
+ $('app').classList.remove('hidden');
+ $('welcome').textContent='Conectado: '+authSession.user.email;
  await loadAll();
+ await loadDailySession();
 }
 async function loadAll(){
  const [p,s,e]=await Promise.all([
@@ -132,7 +173,54 @@ async function loadAll(){
  if(p.error||s.error||e.error){message('appMsg','Erro ao carregar dados: '+(p.error||s.error||e.error).message);return}
  products=p.data||[];sales=s.data||[];expenses=e.data||[];render();
 }
-function render(){
+function localDate(){
+ const d=new Date();
+ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function loadDailySession(){
+ const {data,error}=await db
+  .from('daily_sessions')
+  .select('*')
+  .eq('session_date',localDate())
+  .maybeSingle();
+
+ if(error){
+  message('appMsg','Erro ao carregar expediente: '+error.message);
+  return;
+ }
+
+ session=data;
+ renderDailySession();
+}
+
+function renderDailySession(){
+ $('sessionOpenArea').classList.add('hidden');
+ $('sessionCloseArea').classList.add('hidden');
+ $('sessionClosedArea').classList.add('hidden');
+
+ if(!session){
+  message('sessionStatus','Nenhum expediente aberto hoje.');
+  $('sessionOpenArea').classList.remove('hidden');
+  return;
+ }
+
+ if(session.status==='open'){
+  message('sessionStatus','Expediente aberto.');
+  $('sessionOpenedInfo').textContent='Abertura: '+new Date(session.opened_at).toLocaleString('pt-BR')+' · Caixa inicial: '+money(session.opening_cash);
+  $('sessionCloseArea').classList.remove('hidden');
+  return;
+ }
+
+ message('sessionStatus','Expediente encerrado.');
+ $('sessionClosedArea').classList.remove('hidden');
+ $('sessionSales').textContent=money(session.sales_total);
+ $('sessionExpenses').textContent=money(session.expenses_total);
+ $('sessionProfit').textContent=money(session.net_profit);
+ $('sessionDifference').textContent=money(session.cash_difference);
+ $('sessionCloseInfo').textContent='Fechado em '+new Date(session.closed_at).toLocaleString('pt-BR');
+}
+ function render(){
  $('productList').innerHTML=products.length?products.map(p=>`<div class="item"><div><b>${esc(p.name)}</b><div class="muted">${esc(p.category||'Sem categoria')} · Custo ${money(p.cost)} · Venda ${money(p.price)}</div></div><b>${p.stock} un.</b></div>`).join(''):'Nenhum produto cadastrado.';
  $('saleProduct').innerHTML=products.length?products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${p.stock} em estoque — ${money(p.price)}</option>`).join(''):'<option value="">Cadastre um produto primeiro</option>';
  $('saleList').innerHTML=sales.length?sales.map(s=>`<div class="item"><span>${new Date(s.created_at).toLocaleString('pt-BR')}</span><b>${money(s.total)}</b></div>`).join(''):'Nenhuma venda registrada.';
@@ -145,7 +233,102 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 $('login').onclick=()=>auth('login');$('signup').onclick=()=>auth('signup');
 $('logout').onclick=async()=>{await db.auth.signOut();$('app').classList.add('hidden');$('auth').classList.remove('hidden')};
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.querySelectorAll('.tab').forEach(x=>x.classList.add('hidden'));$(b.dataset.tab).classList.remove('hidden')});
-$('productForm').onsubmit=async ev=>{
+$('sessionOpenForm').onsubmit=async ev=>{
+ ev.preventDefault();
+
+ const openingCash=num($('openingCash').value);
+ if(!Number.isFinite(openingCash)||openingCash<0){
+  message('appMsg','Informe um valor inicial válido.');
+  return;
+ }
+
+ const {data:{user}}=await db.auth.getUser();
+
+ const {error}=await db.from('daily_sessions').insert({
+  user_id:user.id,
+  session_date:localDate(),
+  opening_cash:openingCash,
+  opening_notes:$('openingNotes').value.trim()
+ });
+
+ if(error){
+  message('appMsg','Erro ao abrir expediente: '+error.message);
+  return;
+ }
+
+ ev.target.reset();
+ message('appMsg','Expediente aberto com sucesso!');
+ await loadDailySession();
+};
+ $('sessionCloseForm').onsubmit=async ev=>{
+ ev.preventDefault();
+
+ if(!session||session.status!=='open'){
+  message('appMsg','Não existe expediente aberto.');
+  return;
+ }
+
+ const counted=num($('closingCash').value);
+
+ if(!Number.isFinite(counted)||counted<0){
+  message('appMsg','Informe um valor contado válido.');
+  return;
+ }
+
+ const date=localDate();
+const [y,m,d]=date.split('-').map(Number);
+const start=`${date}T00:00:00-03:00`;
+const next=new Date(y,m-1,d+1);
+const nextDate=`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-${String(next.getDate()).padStart(2,'0')}`;
+const end=`${nextDate}T00:00:00-03:00`;
+
+ const [s,e]=await Promise.all([
+  db.from('sales').select('total,cost_total')
+   .gte('created_at',start).lt('created_at',end),
+  db.from('expenses').select('amount')
+   .gte('created_at',start).lt('created_at',end)
+ ]);
+
+ if(s.error||e.error){
+  message('appMsg','Erro ao calcular o fechamento: '+(s.error||e.error).message);
+  return;
+ }
+
+ const salesTotal=(s.data||[]).reduce((a,x)=>a+Number(x.total),0);
+ const cogs=(s.data||[]).reduce((a,x)=>a+Number(x.cost_total),0);
+ const expensesTotal=(e.data||[]).reduce((a,x)=>a+Number(x.amount),0);
+ const gross=salesTotal-cogs;
+ const net=gross-expensesTotal;
+ const expected=Number(session.opening_cash)+salesTotal-expensesTotal;
+
+ const {data,error}=await db.from('daily_sessions')
+  .update({
+   status:'closed',
+   closed_at:new Date().toISOString(),
+   closing_cash_counted:counted,
+   expected_cash:expected,
+   sales_total:salesTotal,
+   expenses_total:expensesTotal,
+   cogs_total:cogs,
+   gross_profit:gross,
+   net_profit:net,
+   cash_difference:counted-expected,
+   closing_notes:$('closingNotes').value.trim()
+  })
+  .eq('id',session.id)
+  .select()
+  .single();
+
+ if(error){
+  message('appMsg','Erro ao fechar expediente: '+error.message);
+  return;
+ }
+
+ session=data;
+ renderDailySession();
+ message('appMsg','Expediente fechado com sucesso!');
+};
+ $('productForm').onsubmit=async ev=>{
  ev.preventDefault();const cost=num($('pcost').value),price=num($('pprice').value),stock=Number($('pstock').value);
  if(!Number.isFinite(cost)||!Number.isFinite(price)||cost<0||price<0||!Number.isInteger(stock)||stock<0){message('appMsg','Confira custo, preço e quantidade. Use vírgula nos centavos.');return}
  const {data:{user}}=await db.auth.getUser();
