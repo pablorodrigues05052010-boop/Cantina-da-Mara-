@@ -246,6 +246,24 @@ form button{
 <header>
  <div class="brand">
 <img src="mascote-cabecalho.png" class="mascote-header">
+  .mascote-header{
+ width:55px;
+ height:65px;
+ object-fit:contain;
+}
+
+/* COLE AQUI */
+.mascote-area{
+ display:flex;
+ justify-content:flex-end;
+ margin:10px 0;
+}
+
+.mascote-interno{
+ width:100px;
+ height:110px;
+ object-fit:contain;
+}
   <div>
    <h1>Cantina da Mara</h1>
    <p>Sabor de matar!</p>
@@ -276,6 +294,9 @@ form button{
 <div class="stat"><span class="muted">Despesas</span><strong id="expenseTotal">R$ 0,00</strong></div>
 <div class="stat"><span class="muted">Lucro estimado</span><strong id="profit">R$ 0,00</strong></div>
 </div>
+ <div class="mascote-area">
+ <img src="mascote-pipoca.png" class="mascote-interno" alt="Mascote da cantina com pipoca">
+ </div>
 <div class="panel"><h3>Resumo</h3><p id="summary" class="muted">Carregando...</p></div>
 </section>
 <section id="expediente" class="tab hidden">
