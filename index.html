@@ -98,6 +98,12 @@ form button{margin-top:14px;width:100%}
 
 <p class="muted small">A conferência é estimada porque ainda não separamos dinheiro, Pix e cartão.</p>
 </div>
+
+<div class="panel">
+<h2>Histórico de expedientes</h2>
+<p class="muted">Consulte os últimos 30 expedientes registrados.</p>
+<div id="sessionHistory" class="muted">Carregando histórico...</div>
+</div>
 </section>
  <section id="produtos" class="tab hidden">
 <div class="panel"><h2>Cadastrar produto</h2>
@@ -163,6 +169,7 @@ async function showApp(authSession){
  $('welcome').textContent='Conectado: '+authSession.user.email;
  await loadAll();
  await loadDailySession();
+ await loadSessionHistory();
 }
 async function loadAll(){
  const [p,s,e]=await Promise.all([
@@ -193,7 +200,38 @@ async function loadDailySession(){
  session=data;
  renderDailySession();
 }
+async function loadSessionHistory(){
+ const {data,error}=await db
+  .from('daily_sessions')
+  .select('*')
+  .order('session_date',{ascending:false})
+  .limit(30);
 
+ if(error){
+  $('sessionHistory').textContent='Erro ao carregar histórico: '+error.message;
+  return;
+ }
+
+ if(!data.length){
+  $('sessionHistory').textContent='Nenhum expediente registrado ainda.';
+  return;
+ }
+
+ $('sessionHistory').innerHTML=data.map(item=>`
+  <div class="item">
+   <div>
+    <b>${new Date(item.session_date+'T12:00:00').toLocaleDateString('pt-BR')}</b>
+    <div class="muted">
+     ${item.status==='open'?'Em andamento':'Encerrado'}
+     · Vendas: ${money(item.sales_total)}
+     · Despesas: ${money(item.expenses_total)}
+     · Lucro: ${money(item.net_profit)}
+    </div>
+   </div>
+   <b>${money(item.expected_cash)}</b>
+  </div>
+ `).join('');
+}
 function renderDailySession(){
  $('sessionOpenArea').classList.add('hidden');
  $('sessionCloseArea').classList.add('hidden');
@@ -259,6 +297,7 @@ $('sessionOpenForm').onsubmit=async ev=>{
  ev.target.reset();
  message('appMsg','Expediente aberto com sucesso!');
  await loadDailySession();
+ await loadSessionHistory();
 };
  $('sessionCloseForm').onsubmit=async ev=>{
  ev.preventDefault();
@@ -327,6 +366,7 @@ const end=`${nextDate}T00:00:00-03:00`;
  session=data;
  renderDailySession();
  message('appMsg','Expediente fechado com sucesso!');
+  await loadSessionHistory();
 };
  $('productForm').onsubmit=async ev=>{
  ev.preventDefault();const cost=num($('pcost').value),price=num($('pprice').value),stock=Number($('pstock').value);
