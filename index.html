@@ -116,6 +116,21 @@ form button{margin-top:14px;width:100%}
 <div><button class="primary" type="submit">Salvar produto</button></div>
 </form></div>
 <div class="panel"><h2>Estoque</h2><div id="productList" class="muted">Nenhum produto cadastrado.</div></div>
+  <div class="panel">
+<h2>Entrada de mercadorias</h2>
+<form id="stockEntryForm">
+<label>Produto</label>
+<select id="stockProduct" required></select>
+
+<label>Quantidade recebida</label>
+<input id="stockQty" type="number" min="1" step="1" required>
+
+<label>Observação</label>
+<input id="stockDescription" placeholder="Ex.: Compra de mercadorias">
+
+<button class="primary" type="submit">Adicionar ao estoque</button>
+</form>
+  </div>
 </section>
 <section id="vendas" class="tab hidden">
 <div class="panel"><h2>Registrar venda</h2>
@@ -125,6 +140,12 @@ form button{margin-top:14px;width:100%}
 <button class="primary" type="submit">Registrar venda</button>
 </form></div>
 <div class="panel"><h2>Vendas recentes</h2><div id="saleList" class="muted">Nenhuma venda registrada.</div></div>
+ <div class="panel">
+<h2>Histórico de estoque</h2>
+<div id="stockHistory" class="muted">
+Nenhuma movimentação registrada.
+</div>
+ </div>
 </section>
 <section id="despesas" class="tab hidden">
 <div class="panel"><h2>Adicionar despesa</h2>
@@ -171,14 +192,50 @@ async function showApp(authSession){
  await loadDailySession();
  await loadSessionHistory();
 }
+
+ function renderStockHistory(movements){
+ const el=$('stockHistory');
+
+ if(!movements.length){
+  el.innerHTML='Nenhuma movimentação registrada.';
+  return;
+ }
+
+ el.innerHTML=movements.map(m=>{
+  const p=products.find(x=>x.id===m.product_id);
+  const entrada=m.movement_type==='entrada';
+  const tipo=entrada?'Entrada':'Saída';
+  const data=new Date(m.created_at).toLocaleString('pt-BR');
+
+  return `
+   <div style="padding:12px 0;border-bottom:1px solid #ddd">
+    <strong>${esc(p?p.name:'Produto não encontrado')}</strong>
+    <div>${tipo}: ${m.quantity} unidade(s)</div>
+    <div class="muted">${data}</div>
+    <div class="muted">${esc(m.description||'')}</div>
+   </div>
+  `;
+ }).join('');
+ }
 async function loadAll(){
- const [p,s,e]=await Promise.all([
- db.from('products').select('*').order('name'),
- db.from('sales').select('*').order('created_at',{ascending:false}).limit(30),
- db.from('expenses').select('*').order('created_at',{ascending:false}).limit(100)
+ const [p,s,e,m]=await Promise.all([
+  db.from('products').select('*').order('name'),
+  db.from('sales').select('*').order('created_at',{ascending:false}).limit(30),
+  db.from('expenses').select('*').order('created_at',{ascending:false}).limit(100),
+  db.from('stock_movements').select('*').order('created_at',{ascending:false}).limit(100)
  ]);
- if(p.error||s.error||e.error){message('appMsg','Erro ao carregar dados: '+(p.error||s.error||e.error).message);return}
- products=p.data||[];sales=s.data||[];expenses=e.data||[];render();
+
+ if(p.error||s.error||e.error||m.error){
+  message('appMsg','Erro ao carregar dados: '+(p.error||s.error||e.error||m.error).message);
+  return;
+ }
+
+ products=p.data||[];
+ sales=s.data||[];
+ expenses=e.data||[];
+
+ render();
+ renderStockHistory(m.data||[]);
 }
 function localDate(){
  const d=new Date();
@@ -200,6 +257,7 @@ async function loadDailySession(){
  session=data;
  renderDailySession();
 }
+
 async function loadSessionHistory(){
  const {data,error}=await db
   .from('daily_sessions')
@@ -212,26 +270,64 @@ async function loadSessionHistory(){
   return;
  }
 
- if(!data.length){
+ if(!data||!data.length){
   $('sessionHistory').textContent='Nenhum expediente registrado ainda.';
   return;
  }
 
- $('sessionHistory').innerHTML=data.map(item=>`
-  <div class="item">
-   <div>
-    <b>${new Date(item.session_date+'T12:00:00').toLocaleDateString('pt-BR')}</b>
-    <div class="muted">
-     ${item.status==='open'?'Em andamento':'Encerrado'}
-     · Vendas: ${money(item.sales_total)}
-     · Despesas: ${money(item.expenses_total)}
-     · Lucro: ${money(item.net_profit)}
+ $('sessionHistory').innerHTML=data.map(item=>{
+  const date=new Date(item.session_date+'T12:00:00').toLocaleDateString('pt-BR');
+  const opened=new Date(item.opened_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const closed=item.closed_at
+   ?new Date(item.closed_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})
+   :'Em andamento';
+
+  return `
+   <div class="panel">
+    <h3>${date}</h3>
+    <p class="muted">${item.status==='open'?'Em andamento':'Encerrado'}</p>
+
+    <div class="item">
+     <span>Horário de abertura</span>
+     <b>${opened}</b>
+    </div>
+    <div class="item">
+     <span>Horário de fechamento</span>
+     <b>${closed}</b>
+    </div>
+    <div class="item">
+     <span>Dinheiro inicial</span>
+     <b>${money(item.opening_cash)}</b>
+    </div>
+    <div class="item">
+     <span>Vendas</span>
+     <b>${money(item.sales_total)}</b>
+    </div>
+    <div class="item">
+     <span>Despesas</span>
+     <b>${money(item.expenses_total)}</b>
+    </div>
+    <div class="item">
+     <span>Lucro líquido</span>
+     <b>${money(item.net_profit)}</b>
+    </div>
+    <div class="item">
+     <span>Dinheiro esperado</span>
+     <b>${item.expected_cash==null?'—':money(item.expected_cash)}</b>
+    </div>
+    <div class="item">
+     <span>Dinheiro contado</span>
+     <b>${item.closing_cash_counted==null?'—':money(item.closing_cash_counted)}</b>
+    </div>
+    <div class="item">
+     <span>Diferença no caixa</span>
+     <b>${item.cash_difference==null?'—':money(item.cash_difference)}</b>
     </div>
    </div>
-   <b>${money(item.expected_cash)}</b>
-  </div>
- `).join('');
+  `;
+ }).join('');
 }
+ 
 function renderDailySession(){
  $('sessionOpenArea').classList.add('hidden');
  $('sessionCloseArea').classList.add('hidden');
@@ -261,6 +357,7 @@ function renderDailySession(){
  function render(){
  $('productList').innerHTML=products.length?products.map(p=>`<div class="item"><div><b>${esc(p.name)}</b><div class="muted">${esc(p.category||'Sem categoria')} · Custo ${money(p.cost)} · Venda ${money(p.price)}</div></div><b>${p.stock} un.</b></div>`).join(''):'Nenhum produto cadastrado.';
  $('saleProduct').innerHTML=products.length?products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${p.stock} em estoque — ${money(p.price)}</option>`).join(''):'<option value="">Cadastre um produto primeiro</option>';
+  $('stockProduct').innerHTML=products.length?products.map(p=>`<option value="${p.id}">${esc(p.name)} — ${p.stock} em estoque</option>`).join(''):'<option value="">Cadastre um produto primeiro</option>';
  $('saleList').innerHTML=sales.length?sales.map(s=>`<div class="item"><span>${new Date(s.created_at).toLocaleString('pt-BR')}</span><b>${money(s.total)}</b></div>`).join(''):'Nenhuma venda registrada.';
  $('expenseList').innerHTML=expenses.length?expenses.map(e=>`<div class="item"><span>${esc(e.description)}<br><span class="muted">${new Date(e.created_at).toLocaleDateString('pt-BR')}</span></span><b>${money(e.amount)}</b></div>`).join(''):'Nenhuma despesa registrada.';
  const rev=sales.reduce((a,x)=>a+Number(x.total),0),cost=sales.reduce((a,x)=>a+Number(x.cost_total),0),ex=expenses.reduce((a,x)=>a+Number(x.amount),0);
@@ -375,6 +472,46 @@ const end=`${nextDate}T00:00:00-03:00`;
  const {error}=await db.from('products').insert({user_id:user.id,name:$('pname').value.trim(),category:$('pcat').value.trim(),cost,price,stock});
  if(error){message('appMsg','Erro ao salvar produto: '+error.message);return}
  ev.target.reset();$('pstock').value=0;message('appMsg','Produto salvo!');await loadAll();
+};
+ $('stockEntryForm').onsubmit=async ev=>{
+ ev.preventDefault();
+
+ const p=products.find(x=>x.id===$('stockProduct').value);
+ const qty=Number($('stockQty').value);
+
+ if(!p||!Number.isInteger(qty)||qty<1){
+  message('appMsg','Produto inválido ou quantidade inválida.');
+  return;
+ }
+
+ const {data:{user}}=await db.auth.getUser();
+
+ const upd=await db.from('products')
+  .update({stock:Number(p.stock)+qty})
+  .eq('id',p.id);
+
+ if(upd.error){
+  message('appMsg','Erro ao atualizar estoque: '+upd.error.message);
+  return;
+ }
+
+ const movement=await db.from('stock_movements').insert({
+  user_id:user.id,
+  product_id:p.id,
+  movement_type:'entrada',
+  quantity:qty,
+  description:$('stockDescription').value.trim()||'Entrada de mercadorias'
+ });
+
+ if(movement.error){
+  message('appMsg','Estoque atualizado, mas houve erro ao registrar a movimentação. Não repita a entrada.');
+  await loadAll();
+  return;
+ }
+
+ ev.target.reset();
+ message('appMsg','Estoque atualizado com sucesso!');
+ await loadAll();
 };
 $('saleForm').onsubmit=async ev=>{
  ev.preventDefault();const p=products.find(x=>x.id===$('saleProduct').value),qty=Number($('saleQty').value);
