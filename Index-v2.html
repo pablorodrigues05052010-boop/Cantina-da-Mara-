@@ -265,6 +265,7 @@ nav button:hover {
   .panel { padding:16px; }
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -425,6 +426,14 @@ nav button:hover {
 </div>
 
 <script>
+const SUPABASE_URL = 's://umssuhegmqajewvbinqf.supabase.co';
+const SUPABASE_ANON_KEY = 'publishable_YzX-YOAH9QCnWL8x5Je51Q_PERsWD2J';
+
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+
 function showPage(page,button) {
   document.querySelectorAll('.section').forEach(section => {
     section.classList.remove('active');
