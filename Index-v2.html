@@ -435,6 +435,22 @@ const db = window.supabase.createClient(
 );
 
 console.log('Supabase conectado:', !!db);
+  async function testarConexao() {
+  const { data, error } = await db
+    .from('products')
+    .select('id')
+    .limit(1);
+
+  if (error) {
+    console.error('Erro na conexão:', error.message);
+    alert('Erro ao conectar: ' + error.message);
+  } else {
+    console.log('Conexão com Supabase funcionando!');
+    alert('Supabase conectado com sucesso!');
+  }
+}
+
+testarConexao();
 function showPage(page,button) {
   document.querySelectorAll('.section').forEach(section => {
     section.classList.remove('active');
