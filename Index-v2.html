@@ -481,6 +481,24 @@ const db = window.supabase.createClient(
   SUPABASE_ANON_KEY
 );
 
+async function testarConexao() {
+  const { data, error } = await db
+    .from('products')
+    .select('id')
+    .limit(1);
+
+  if (error) {
+    alert('Erro na leitura do banco: ' + error.message);
+    console.error(error);
+    return;
+  }
+
+  alert('CONEXÃO REAL COM O SUPABASE FUNCIONANDO!');
+  console.log('Teste realizado:', data);
+}
+
+testarConexao();
+  
 function showPage(page,button) {
   document.querySelectorAll('.section').forEach(section => {
     section.classList.remove('active');
