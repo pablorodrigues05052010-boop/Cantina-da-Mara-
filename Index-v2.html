@@ -1,4 +1,4 @@
-
+.
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -9,6 +9,121 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
+  
+/* TELA DE LOGIN */
+.auth-screen {
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:22px;
+  background:var(--bg);
+}
+
+.auth-card {
+  width:100%;
+  max-width:410px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:28px;
+}
+
+.auth-brand {
+  text-align:center;
+  margin-bottom:25px;
+}
+
+.auth-brand .logo {
+  margin:0 auto 14px;
+  width:60px;
+  height:60px;
+  font-size:30px;
+}
+
+.auth-brand h1 {
+  font-size:23px;
+  margin:0;
+}
+
+.auth-brand p {
+  color:var(--muted);
+  font-size:13px;
+}
+
+.auth-card label {
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  margin:15px 0 7px;
+}
+
+.auth-card input {
+  width:100%;
+  padding:13px;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:var(--bg);
+  color:var(--text);
+  font-size:15px;
+}
+
+.auth-primary {
+  width:100%;
+  border:0;
+  border-radius:9px;
+  background:var(--orange);
+  color:white;
+  padding:14px;
+  font-weight:bold;
+  margin-top:20px;
+  cursor:pointer;
+}
+
+.auth-switch {
+  width:100%;
+  border:0;
+  background:transparent;
+  color:#ff994d;
+  padding:15px 5px 0;
+  cursor:pointer;
+}
+
+.auth-message {
+  color:var(--muted);
+  font-size:12px;
+  margin-top:14px;
+}
+
+body:not(.authed) .layout {
+  display:none;
+}
+
+body.authed #authScreen {
+  display:none;
+}
+
+.user-actions {
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.logout-btn {
+  border:1px solid var(--border);
+  background:var(--panel);
+  color:var(--text);
+  border-radius:20px;
+  padding:9px 12px;
+  cursor:pointer;
+}
+
+@media(max-width:700px) {
+  .auth-card {
+    padding:23px;
+  }
+}
+  
 :root {
   --bg:#20232c;
   --sidebar:#191d29;
@@ -328,6 +443,33 @@ nav button.active {
 </head>
 
 <body>
+  <div id="authScreen" class="auth-screen">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="logo">M</div>
+      <h1>Cantina da Mara</h1>
+      <p>Entre na sua conta para continuar</p>
+    </div>
+
+    <form id="authForm">
+      <label for="authEmail">E-mail</label>
+      <input id="authEmail" type="email" placeholder="seu@email.com" required>
+
+      <label for="authPassword">Senha</label>
+      <input id="authPassword" type="password" placeholder="Sua senha" required>
+
+      <button class="auth-primary" type="submit" id="authSubmit">
+        Entrar
+      </button>
+    </form>
+
+    <button class="auth-switch" id="authSwitch" type="button">
+      Criar uma conta
+    </button>
+
+    <p class="auth-message" id="authMessage"></p>
+  </div>
+  </div>
 <div class="layout">
 
 <aside class="sidebar" id="sidebar">
@@ -480,24 +622,193 @@ const db = window.supabase.createClient(
   SUPABASE_URL,
   SUPABASE_ANON_KEY
 );
+ 
 
-async function testarConexao() {
-  const { data, error } = await db
-    .from('products')
-    .select('id')
-    .limit(1);
+// ELEMENTOS DA TELA DE LOGIN
+const authForm = document.getElementById('authForm');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authMessage = document.getElementById('authMessage');
+const authSubmit = document.getElementById('authSubmit');
+const authSwitch = document.getElementById('authSwitch');
+
+let criandoConta = false;
+
+// BOTÃO DE SAIR
+const topbar = document.querySelector('.topbar');
+const statusElement = document.querySelector('.status');
+
+const userActions = document.createElement('div');
+userActions.className = 'user-actions';
+
+const logoutButton = document.createElement('button');
+logoutButton.className = 'logout-btn';
+logoutButton.textContent = 'Sair';
+logoutButton.type = 'button';
+
+userActions.appendChild(statusElement);
+userActions.appendChild(logoutButton);
+topbar.appendChild(userActions);
+
+// MENSAGENS
+function mostrarMensagem(texto) {
+  authMessage.textContent = texto;
+}
+
+// ALTERNAR ENTRE LOGIN E CADASTRO
+authSwitch.addEventListener('click', () => {
+  criandoConta = !criandoConta;
+
+  authSubmit.textContent = criandoConta
+    ? 'Criar conta'
+    : 'Entrar';
+
+  authSwitch.textContent = criandoConta
+    ? 'Já tenho uma conta'
+    : 'Criar uma conta';
+
+  mostrarMensagem('');
+});
+
+// ENTRAR OU CRIAR CONTA
+authForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+
+  authSubmit.disabled = true;
+  authSubmit.textContent = 'Aguarde...';
+  mostrarMensagem('Conectando...');
+
+  try {
+    if (criandoConta) {
+      const { data, error } = await db.auth.signUp({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      if (data.session) {
+        mostrarMensagem('Conta criada com sucesso!');
+      } else {
+        mostrarMensagem(
+          'Cadastro realizado! Verifique seu e-mail para confirmar a conta.'
+        );
+      }
+
+    } else {
+      const { error } = await db.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) throw error;
+
+      mostrarMensagem('Login realizado!');
+    }
+
+  } catch (error) {
+    mostrarMensagem('Erro: ' + error.message);
+
+  } finally {
+    authSubmit.disabled = false;
+    authSubmit.textContent = criandoConta
+      ? 'Criar conta'
+      : 'Entrar';
+  }
+});
+
+// SAIR DA CONTA
+logoutButton.addEventListener('click', async () => {
+  logoutButton.disabled = true;
+
+  const { error } = await db.auth.signOut();
 
   if (error) {
-    alert('Erro na leitura do banco: ' + error.message);
-    console.error(error);
+    alert('Erro ao sair: ' + error.message);
+  }
+
+  logoutButton.disabled = false;
+});
+
+// ATUALIZAR INTERFACE CONFORME A SESSÃO
+function atualizarInterface(session) {
+  document.body.classList.toggle('authed', !!session);
+}
+
+// OBSERVAR ALTERAÇÕES DE AUTENTICAÇÃO
+db.auth.onAuthStateChange((_event, session) => {
+  atualizarInterface(session);
+});
+
+// VERIFICAR SE JÁ EXISTE UMA SESSÃO
+async function verificarSessao() {
+  const { data, error } = await db.auth.getSession();
+
+  if (error) {
+    mostrarMensagem('Erro ao verificar sessão: ' + error.message);
     return;
   }
 
-  alert('CONEXÃO REAL COM O SUPABASE FUNCIONANDO!');
-  console.log('Teste realizado:', data);
+  atualizarInterface(data.session);
 }
 
-testarConexao();
+verificarSessao();
+
+// NAVEGAÇÃO
+function showPage(page, button) {
+  document.querySelectorAll('.section').forEach(section => {
+    section.classList.remove('active');
+  });
+
+  document.getElementById(page).classList.add('active');
+
+  document.querySelectorAll('nav button').forEach(item => {
+    item.classList.remove('active');
+  });
+
+  if (button) {
+    button.classList.add('active');
+  } else {
+    document.querySelectorAll('nav button').forEach(item => {
+      if (item.getAttribute('onclick').includes("'" + page + "'")) {
+        item.classList.add('active');
+      }
+    });
+  }
+
+  const titles = {
+    inicio: 'Bem-vindo',
+    visao: 'Visão geral',
+    caixa: 'Caixa',
+    produtos: 'Produtos',
+    estoque: 'Estoque',
+    despesas: 'Despesas',
+    calendario: 'Calendário',
+    relatorios: 'Relatórios',
+    expedientes: 'Expedientes',
+    configuracoes: 'Configurações'
+  };
+
+  document.getElementById('pageTitle').textContent = titles[page];
+  document.getElementById('sidebar').classList.remove('open');
+}
+
+function toggleMenu() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// DATA ATUAL
+document.getElementById('today').textContent =
+  new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  
   
 function showPage(page,button) {
   document.querySelectorAll('.section').forEach(section => {
