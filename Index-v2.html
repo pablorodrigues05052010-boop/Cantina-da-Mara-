@@ -810,26 +810,7 @@ document.getElementById('today').textContent =
   });
   
   
-function showPage(page,button) {
-  document.querySelectorAll('.section').forEach(section => {
-    section.classList.remove('active');
-  });
 
-  document.getElementById(page).classList.add('active');
-
-  document.querySelectorAll('nav button').forEach(item => {
-    item.classList.remove('active');
-  });
-
-  if(button) {
-    button.classList.add('active');
-  } else {
-    document.querySelectorAll('nav button').forEach(item => {
-      if(item.getAttribute('onclick').includes("'" + page + "'")) {
-        item.classList.add('active');
-      }
-    });
-  }
 
   const titles = {
     inicio:'Bem-vindo',
